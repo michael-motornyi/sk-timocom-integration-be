@@ -313,7 +313,9 @@ async function getMyVehicleSpaceOffers(
       ...(params.status && { status: params.status }),
     });
 
-    const response = await context.client.get(`/vehicle-space-offers?${queryParams}`);
+    const response = await context.client.get(
+      `/freight-exchange/3/my-vehicle-space-offers?${queryParams}`,
+    );
     return {
       success: true,
       data: response.data,
@@ -333,7 +335,9 @@ async function getVehicleSpaceOffer(
 ): Promise<TimocomApiResponse<unknown>> {
   try {
     const params = createUrlParams(context.credentials);
-    const response = await context.client.get(`/vehicle-space-offers/${publicOfferId}?${params}`);
+    const response = await context.client.get(
+      `/freight-exchange/3/my-vehicle-space-offers/${publicOfferId}?${params}`,
+    );
 
     return {
       success: true,
@@ -354,39 +358,57 @@ async function createVehicleSpaceOffer(
 ): Promise<TimocomApiResponse<unknown>> {
   try {
     const params = createUrlParams(context.credentials);
-    const response = await context.client.post(`/vehicle-space-offers?${params}`, offer);
+    console.log(
+      '🚛 Creating vehicle space offer with URL:',
+      `/freight-exchange/3/my-vehicle-space-offers?${params}`,
+    );
+    console.log('🚛 Payload:', JSON.stringify(offer, null, 2));
 
-    return {
-      success: true,
-      data: response.data,
-      timestamp: new Date().toISOString(),
-    };
-  } catch (error) {
-    throw new Error(`TIMOCOM API Error: ${(error as Error).message}`);
-  }
-}
-
-/**
- * Update an existing vehicle space offer
- */
-async function updateVehicleSpaceOffer(
-  context: TimocomClientContext,
-  publicOfferId: string,
-  updates: Partial<PublishVehicleSpaceOfferRequest>,
-): Promise<TimocomApiResponse<unknown>> {
-  try {
-    const params = createUrlParams(context.credentials);
-    const response = await context.client.put(
-      `/vehicle-space-offers/${publicOfferId}?${params}`,
-      updates,
+    const response = await context.client.post(
+      '/freight-exchange/3/my-vehicle-space-offers',
+      offer,
+      {
+        params,
+      },
     );
 
+    console.log('✅ TIMOCOM API Response:', response.data);
     return {
       success: true,
       data: response.data,
       timestamp: new Date().toISOString(),
     };
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error('❌ TIMOCOM createVehicleSpaceOffer error:', error);
+
+    // Enhanced error handling for axios errors
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as {
+        response?: {
+          status?: number;
+          statusText?: string;
+          data?: unknown;
+        };
+        config?: {
+          url?: string;
+          method?: string;
+        };
+      };
+
+      if (axiosError.response) {
+        console.error('📡 Full TIMOCOM API Error Response:', {
+          status: axiosError.response.status,
+          statusText: axiosError.response.statusText,
+          data: axiosError.response.data,
+          url: axiosError.config?.url,
+        });
+
+        throw new Error(
+          `TIMOCOM API ${axiosError.response.status}: ${JSON.stringify(axiosError.response.data)}`,
+        );
+      }
+    }
+
     throw new Error(`TIMOCOM API Error: ${(error as Error).message}`);
   }
 }
@@ -400,7 +422,9 @@ async function deleteVehicleSpaceOffer(
 ): Promise<TimocomApiResponse<void>> {
   try {
     const params = createUrlParams(context.credentials);
-    await context.client.delete(`/vehicle-space-offers/${publicOfferId}?${params}`);
+    await context.client.delete(
+      `/freight-exchange/3/my-vehicle-space-offers/${publicOfferId}?${params}`,
+    );
 
     return {
       success: true,
@@ -475,11 +499,6 @@ function createTimocomApi(config: TimocomConfig = {}) {
 
     createVehicleSpaceOffer: (offer: PublishVehicleSpaceOfferRequest) =>
       createVehicleSpaceOffer(context, offer),
-
-    updateVehicleSpaceOffer: (
-      publicOfferId: string,
-      updates: Partial<PublishVehicleSpaceOfferRequest>,
-    ) => updateVehicleSpaceOffer(context, publicOfferId, updates),
 
     deleteVehicleSpaceOffer: (publicOfferId: string) =>
       deleteVehicleSpaceOffer(context, publicOfferId),

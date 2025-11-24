@@ -1,5 +1,4 @@
 import express, { type Request, type Response } from 'express';
-import type { PublishVehicleSpaceOfferRequest } from '../../../types/index.js';
 import { getErrorMessage, handleRouteError } from '../../../utils/error-handler.js';
 import { createTimocomClient, requireTimocomConfig } from './common.js';
 
@@ -143,104 +142,6 @@ router.delete(
       const result = await client.deleteVehicleSpaceOffer(publicOfferId);
 
       res.json(result);
-    } catch (error: unknown) {
-      res.status(500).json({
-        success: false,
-        error: getErrorMessage(error),
-        timestamp: new Date().toISOString(),
-      });
-    }
-  },
-);
-
-// Bulk create vehicle space offers from generated data
-// Features: Batch processing, automatic retry with 1-second delay, concurrent execution
-router.post(
-  '/vehicle-space-offers/bulk',
-  requireTimocomConfig,
-  async (req: Request, res: Response) => {
-    try {
-      const client = createTimocomClient();
-      const { offers, maxConcurrent = 5 } = req.body;
-
-      if (!Array.isArray(offers) || offers.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Offers array is required and must not be empty',
-        });
-      }
-
-      console.log(`🚛 Starting bulk creation of ${offers.length} vehicle space offers...`);
-
-      const results: Array<{ index: number; success: boolean; data?: unknown; error?: string }> =
-        [];
-      const failed: Array<{ index: number; error: string }> = [];
-      let processed = 0;
-
-      // Process offers in batches to avoid overwhelming the API
-      for (let i = 0; i < offers.length; i += maxConcurrent) {
-        const batch = offers.slice(i, i + maxConcurrent);
-        const batchPromises = batch.map(async (offer: unknown, index: number) => {
-          const actualIndex = i + index;
-
-          // First attempt
-          try {
-            const result = await client.createVehicleSpaceOffer(
-              offer as PublishVehicleSpaceOfferRequest,
-            );
-            processed++;
-            console.log(`✅ Created offer ${processed}/${offers.length}`);
-            return { index: actualIndex, success: true, data: result.data };
-          } catch (error: unknown) {
-            const errorMessage = getErrorMessage(error);
-            console.log(
-              `⚠️ First attempt failed for offer ${actualIndex}: ${errorMessage}. Retrying in 1 second...`,
-            );
-
-            // Wait 1 second before retry
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-
-            // Retry attempt
-            try {
-              const result = await client.createVehicleSpaceOffer(
-                offer as PublishVehicleSpaceOfferRequest,
-              );
-              processed++;
-              console.log(`✅ Retry successful for offer ${processed}/${offers.length}`);
-              return { index: actualIndex, success: true, data: result.data };
-            } catch (retryError: unknown) {
-              const retryErrorMessage = getErrorMessage(retryError);
-              failed.push({
-                index: actualIndex,
-                error: `Initial: ${errorMessage}, Retry: ${retryErrorMessage}`,
-              });
-              console.log(`❌ Both attempts failed for offer ${actualIndex}: ${retryErrorMessage}`);
-              return { index: actualIndex, success: false, error: retryErrorMessage };
-            }
-          }
-        });
-
-        const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
-
-        // Small delay between batches to be respectful to the API
-        if (i + maxConcurrent < offers.length) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-      }
-
-      res.json({
-        success: true,
-        message: `Bulk operation completed: ${results.filter((r) => r.success).length} created, ${failed.length} failed`,
-        results: {
-          total: offers.length,
-          created: results.filter((r) => r.success).length,
-          failed: failed.length,
-          createdOffers: results.filter((r) => r.success).map((r) => r.data),
-          failures: failed,
-        },
-        timestamp: new Date().toISOString(),
-      });
     } catch (error: unknown) {
       res.status(500).json({
         success: false,

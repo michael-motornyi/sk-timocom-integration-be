@@ -4,9 +4,7 @@ import { parse } from 'csv-parse/sync';
 
 // Type imports for TypeScript
 import type {
-  Address,
   ContactPerson,
-  LoadingPlace,
   Money,
   PublishVehicleSpaceOfferRequest,
   VehicleSpaceProperties,
@@ -92,12 +90,28 @@ function parseNumber(value: string): number {
 }
 
 function createContactPerson(row: VehicleCSVRow): ContactPerson {
+  // Map common titles to TIMOCOM-compatible ones
+  const titleMapping: Record<string, string> = {
+    Dr: 'MR',
+    DR: 'MR',
+    Ms: 'MRS',
+    MS: 'MRS',
+    Miss: 'MRS',
+    Herr: 'MR',
+    Prof: 'MR',
+    Professor: 'MR',
+  };
+
+  const rawTitle = row['contactPerson-title'] || 'MR';
+  const mappedTitle = titleMapping[rawTitle] || rawTitle.toUpperCase();
+
   const contact: ContactPerson = {
-    title: row['contactPerson-title'] || 'Mr',
+    title: mappedTitle, // Use TIMOCOM-compatible title
     firstName: row['contactPerson-firstName'] || 'John',
     lastName: row['contactPerson-lastName'] || 'Doe',
-    email: row['contactPerson-email'] || 'john.doe@example.com',
-    languages: parseStringArray(row['contactPerson-languages']) || ['en'],
+    email: row['contactPerson-email'] || 'schnittstellen@timocom.com',
+    languages: parseStringArray(row['contactPerson-languages']) || ['de'],
+    businessPhone: row['contactPerson-businessPhone'] || '+49 211 88 26 88 26', // Always include businessPhone
   };
 
   if (row['contactPerson-businessPhone']) {
@@ -114,71 +128,80 @@ function createContactPerson(row: VehicleCSVRow): ContactPerson {
 }
 
 function createVehicleSpaceProperties(row: VehicleCSVRow): VehicleSpaceProperties {
-  return {
-    body: parseStringArray(row['vehicleProperties-body']) || ['standard'],
-    type: parseStringArray(row['vehicleProperties-type']) || ['truck'], // exactly one required
-    bodyProperty: parseStringArray(row['vehicleProperties-bodyProperty']) || undefined,
-    equipment: parseStringArray(row['vehicleProperties-equipment']) || undefined,
-    loadSecuring: parseStringArray(row['vehicleProperties-loadSecuring']) || undefined,
-    swapBody: parseStringArray(row['vehicleProperties-swapBody']) || undefined,
-  };
-}
-
-function createAddress(
-  objectType: string,
-  country: string,
-  city: string,
-  postalCode?: string,
-): Address {
-  const address: Address = {
-    objectType: objectType || 'address',
-    country: country || 'DE',
-    city: city || 'Berlin',
+  // Map common body types to TIMOCOM enum values
+  const bodyMapping: Record<string, string> = {
+    'box van': 'MOVING_FLOOR',
+    'flatbed trailer': 'MOVING_FLOOR',
+    'refrigerated truck': 'MOVING_FLOOR',
+    'tarpaulin truck': 'MOVING_FLOOR',
+    'container chassis': 'MOVING_FLOOR',
+    'curtain sider': 'MOVING_FLOOR',
+    'tank trailer': 'MOVING_FLOOR',
+    'low loader': 'MOVING_FLOOR',
+    'bulk carrier': 'MOVING_FLOOR',
+    'container truck': 'MOVING_FLOOR',
+    'tipper truck': 'MOVING_FLOOR',
   };
 
-  if (postalCode) {
-    address.postalCode = postalCode;
+  // Map common vehicle types to TIMOCOM enum values
+  const typeMapping: Record<string, string> = {
+    'refrigerated truck': 'VEHICLE_UP_TO_12_T',
+    'insulated van': 'VEHICLE_UP_TO_12_T',
+    'tarpaulin truck': 'VEHICLE_UP_TO_12_T',
+    'flatbed truck': 'VEHICLE_UP_TO_12_T',
+    'platform trailer': 'VEHICLE_UP_TO_12_T',
+    'tipper truck': 'VEHICLE_UP_TO_12_T',
+    'container carrier': 'VEHICLE_UP_TO_12_T',
+    'tank truck': 'VEHICLE_UP_TO_12_T',
+    'grain truck': 'VEHICLE_UP_TO_12_T',
+    'box van': 'VEHICLE_UP_TO_12_T',
+    'flatbed trailer': 'VEHICLE_UP_TO_12_T',
+    'container chassis': 'VEHICLE_UP_TO_12_T',
+    'curtain sider': 'VEHICLE_UP_TO_12_T',
+    'tank trailer': 'VEHICLE_UP_TO_12_T',
+    'low loader': 'VEHICLE_UP_TO_12_T',
+    'bulk carrier': 'VEHICLE_UP_TO_12_T',
+    'container truck': 'VEHICLE_UP_TO_12_T',
+  };
+
+  const body = parseStringArray(row['vehicleProperties-body']);
+  const type = parseStringArray(row['vehicleProperties-type']);
+
+  // Map CSV values to TIMOCOM enums
+  const mappedBody =
+    body.length > 0 ? body.map((b) => bodyMapping[b] || 'MOVING_FLOOR') : ['MOVING_FLOOR'];
+  const mappedType =
+    type.length > 0
+      ? type.map((t) => typeMapping[t] || 'VEHICLE_UP_TO_12_T')
+      : ['VEHICLE_UP_TO_12_T'];
+
+  const properties: VehicleSpaceProperties = {
+    body: mappedBody,
+    type: mappedType, // exactly one required for vehicle space
+  };
+
+  // Only add optional arrays if they have values
+  const bodyProperty = parseStringArray(row['vehicleProperties-bodyProperty']);
+  if (bodyProperty && bodyProperty.length > 0) {
+    properties.bodyProperty = bodyProperty;
   }
 
-  return address;
-}
+  const equipment = parseStringArray(row['vehicleProperties-equipment']);
+  if (equipment && equipment.length > 0) {
+    properties.equipment = equipment;
+  }
 
-function createLoadingPlaces(row: VehicleCSVRow): LoadingPlace[] {
-  const places: LoadingPlace[] = [];
+  const loadSecuring = parseStringArray(row['vehicleProperties-loadSecuring']);
+  if (loadSecuring && loadSecuring.length > 0) {
+    properties.loadSecuring = loadSecuring;
+  }
 
-  // Create LOADING place from start location
-  const loadingPlace: LoadingPlace = {
-    loadingType: 'LOADING',
-    address: createAddress(
-      row.startObjectType || 'address',
-      row.startCountry || 'DE',
-      row.startCity || 'Berlin',
-      row.startPostalCode,
-    ),
-    earliestLoadingDate: row.loadingDate || '2025-10-20',
-    latestLoadingDate: row.loadingDate || '2025-10-20', // Same date for vehicle space
-  };
+  const swapBody = parseStringArray(row['vehicleProperties-swapBody']);
+  if (swapBody && swapBody.length > 0) {
+    properties.swapBody = swapBody;
+  }
 
-  places.push(loadingPlace);
-
-  // Create UNLOADING place based on destination area
-  const destinationCity = row['destintationArea-Address'] || row.startCity || 'Warsaw';
-  // For vehicle space, we create a destination based on the destination area
-  const unloadingPlace: LoadingPlace = {
-    loadingType: 'UNLOADING',
-    address: createAddress(
-      'address',
-      row.startCountry || 'PL', // Default to PL if not specified
-      destinationCity,
-      undefined,
-    ),
-    earliestLoadingDate: row.loadingDate || '2025-10-20',
-    latestLoadingDate: row.loadingDate || '2025-10-20',
-  };
-
-  places.push(unloadingPlace);
-
-  return places;
+  return properties;
 }
 
 function _createMoney(amount: string, currency: string): Money | undefined {
@@ -197,32 +220,57 @@ function convertRowToVehicleSpaceOffer(
   row: VehicleCSVRow,
   _index: number,
 ): PublishVehicleSpaceOfferRequest {
-  const customerId = parseNumber(row['customer-id']);
+  // Generate future dates starting tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0] || '2025-11-22';
 
   const offer: PublishVehicleSpaceOfferRequest = {
-    objectType: 'VehicleSpaceOffer',
-    customer: { id: customerId || 10000 }, // Required field, use default if missing
+    objectType: 'vehicleSpaceOffer',
+    customer: { id: 902245 }, // Always use the actual TIMOCOM company ID from environment
     contactPerson: createContactPerson(row),
     vehicleProperties: createVehicleSpaceProperties(row),
     trackable: parseBoolean(row.trackable),
-    acceptQuotes: true, // Default to true for vehicle space offers
-    loadingPlaces: createLoadingPlaces(row),
+    acceptQuotes: false,
+
+    // Use start/destination/loadingDate structure for vehicle space offers
+    start: {
+      objectType: 'address',
+      city: row.startCity || 'Berlin',
+      country: row.startCountry || 'DE',
+      postalCode: row.startPostalCode || undefined,
+    },
+
+    destination: {
+      area: {
+        address: {
+          objectType: 'address',
+          city: row['destintationArea-Address'] || row.startCity || 'Warsaw',
+          country: row.startCountry || 'PL',
+        },
+        size_km: parseNumber(row['destintationArea-SizeKm']) || 55,
+      },
+    },
+
+    loadingDate: tomorrowStr,
   };
 
-  // Add optional properties only if they have values
-  const additionalInfo: string[] = [];
+  // Add vehicle dimensions if available
   if (row['trailerlength-m']) {
-    additionalInfo.push(`Trailer length: ${row['trailerlength-m']}m`);
+    offer.trailerLength_m = parseNumber(row['trailerlength-m']) || 12.31;
   }
   if (row['trucklength-m']) {
-    additionalInfo.push(`Truck length: ${row['trucklength-m']}m`);
+    offer.truckLength_m = parseNumber(row['trucklength-m']) || 12.31;
   }
   if (row['trailerWeight-t']) {
-    additionalInfo.push(`Trailer weight: ${row['trailerWeight-t']}t`);
+    offer.trailerWeight_t = parseNumber(row['trailerWeight-t']) || 5.55;
   }
   if (row['truckWeight-t']) {
-    additionalInfo.push(`Truck weight: ${row['truckWeight-t']}t`);
+    offer.truckWeight_t = parseNumber(row['truckWeight-t']) || 5.55;
   }
+
+  // Add additional information for remaining fields
+  const additionalInfo: string[] = [];
   if (row['destintationArea-SizeKm']) {
     additionalInfo.push(`Destination area: ${row['destintationArea-SizeKm']}km radius`);
   }
@@ -284,23 +332,19 @@ function generateVariation(
   const rand2 = random(seed + 1);
   const rand3 = random(seed + 2);
 
-  // Vary trackable and acceptQuotes randomly
+  // Vary trackable randomly
   variation.trackable = rand1 > 0.4;
-  variation.acceptQuotes = random(seed + 3) > 0.3; // Usually true for vehicle space
 
   // Vary customer ID slightly
   variation.customer.id = baseOffer.customer.id + Math.floor(rand2 * 10);
 
   // Vary dates slightly
-  const baseDate = new Date(baseOffer.loadingPlaces[0]?.earliestLoadingDate || '2025-10-20');
-  const dayOffset = Math.floor(rand3 * 10) - 5; // -5 to +5 days
+  const baseDate = new Date(baseOffer.loadingDate || '2025-11-22');
+  const dayOffset = Math.floor(rand3 * 30); // 0 to 30 days from base date
   const newDate = new Date(baseDate.getTime() + dayOffset * 24 * 60 * 60 * 1000);
-  const dateStr = newDate.toISOString().split('T')[0] || '2025-10-20';
+  const dateStr = newDate.toISOString().split('T')[0] || '2025-11-22';
 
-  variation.loadingPlaces.forEach((place: LoadingPlace) => {
-    place.earliestLoadingDate = dateStr;
-    place.latestLoadingDate = dateStr; // Same date for vehicle space
-  });
+  variation.loadingDate = dateStr;
 
   return variation;
 }

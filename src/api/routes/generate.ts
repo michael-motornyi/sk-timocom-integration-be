@@ -1,7 +1,9 @@
 import express, { type Request, type Response } from 'express';
+import type { CreateFreightOfferRequest, PublishVehicleSpaceOfferRequest } from '../../types/index.js';
 import { generateFreightOffers } from '../../scripts/generate-freight-offers.js';
 import { generateVehicleSpaceOffers } from '../../scripts/generate-vehicle-space-offers.js';
-import { handleRouteError } from '../../utils/error-handler.js';
+import { getErrorMessage, handleRouteError } from '../../utils/error-handler.js';
+import { createTimocomClient } from './timocom/common.js';
 
 const router = express.Router();
 
@@ -21,8 +23,9 @@ const router = express.Router();
  * - maxConcurrent: Concurrent requests for bulk posting (default: 10)
  *
  * BULK POSTING BEHAVIOR:
- * - Uses TIMOCOM bulk endpoints (/freight-offers/bulk, /vehicle-space-offers/bulk)
+ * - Uses TIMOCOM client directly for bulk creation
  * - Processes offers in concurrent batches for better performance
+ * - Includes automatic retry with 1-second delay for failed attempts
  * - Returns detailed results including success/failure counts
  * - Gracefully handles TIMOCOM API errors without failing generation
  *
@@ -70,30 +73,77 @@ router.post('/freight', async (req: Request, res: Response) => {
       console.log(`📤 API: Bulk posting ${numCount} freight offers to TIMOCOM...`);
 
       try {
-        // Make HTTP request to bulk endpoint
-        const response = await fetch('http://localhost:3000/api/timocom/freight-offers/bulk', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            offers: freightOffers,
-            maxConcurrent: 10, // Process more items concurrently for better performance
-          }),
-        });
+        const client = createTimocomClient();
+        const maxConcurrent = 5;
 
-        if (response.ok) {
-          const bulkResult = await response.json();
-          timocomResults = bulkResult.results;
-          console.log(
-            `✅ TIMOCOM bulk posting completed: ${timocomResults?.created || 0} successful, ${timocomResults?.failed || 0} failed`,
-          );
-        } else {
-          console.error(
-            `❌ TIMOCOM bulk posting failed: ${response.status} ${response.statusText}`,
-          );
-          timocomResults = { total: numCount, created: 0, failed: numCount };
+        const results: Array<{ index: number; success: boolean; data?: unknown; error?: string }> = [];
+        const failed: Array<{ index: number; error: string }> = [];
+        let processed = 0;
+
+        // Process offers in batches to avoid overwhelming the API
+        for (let i = 0; i < freightOffers.length; i += maxConcurrent) {
+          const batch = freightOffers.slice(i, i + maxConcurrent);
+          const batchPromises = batch.map(async (offer: unknown, index: number) => {
+            const actualIndex = i + index;
+
+            // First attempt
+            try {
+              const result = await client.createFreightOffer(offer as CreateFreightOfferRequest);
+              processed++;
+              console.log(`✅ Created offer ${processed}/${freightOffers.length}`);
+              return { index: actualIndex, success: true, data: result.data };
+            } catch (error: unknown) {
+              const errorMessage = getErrorMessage(error);
+              console.log(
+                `⚠️ First attempt failed for offer ${actualIndex}: ${errorMessage}. Retrying in 1 second...`,
+              );
+
+              // Wait 1 second before retry
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+
+              // Retry attempt
+              try {
+                const result = await client.createFreightOffer(offer as CreateFreightOfferRequest);
+                processed++;
+                console.log(`✅ Retry successful for offer ${processed}/${freightOffers.length}`);
+                return { index: actualIndex, success: true, data: result.data };
+              } catch (retryError: unknown) {
+                const retryErrorMessage = getErrorMessage(retryError);
+                failed.push({
+                  index: actualIndex,
+                  error: `Initial: ${errorMessage}, Retry: ${retryErrorMessage}`,
+                });
+                console.log(`❌ Both attempts failed for offer ${actualIndex}: ${retryErrorMessage}`);
+                return { index: actualIndex, success: false, error: retryErrorMessage };
+              }
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          results.push(...batchResults);
+
+          // Small delay between batches to be respectful to the API
+          if (i + maxConcurrent < freightOffers.length) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
+
+        timocomResults = {
+          total: freightOffers.length,
+          created: results.filter((r) => r.success).length,
+          failed: failed.length,
+          results: {
+            total: freightOffers.length,
+            created: results.filter((r) => r.success).length,
+            failed: failed.length,
+            createdOffers: results.filter((r) => r.success).map((r) => r.data),
+            failures: failed,
+          },
+        };
+
+        console.log(
+          `✅ TIMOCOM bulk posting completed: ${timocomResults.created} successful, ${timocomResults.failed} failed`,
+        );
       } catch (bulkError: unknown) {
         console.error('❌ TIMOCOM bulk posting error:', bulkError);
         timocomResults = { total: numCount, created: 0, failed: numCount };
@@ -152,33 +202,77 @@ router.post('/vehicle-space', async (req: Request, res: Response) => {
       console.log(`📤 API: Bulk posting ${numCount} vehicle space offers to TIMOCOM...`);
 
       try {
-        // Make HTTP request to bulk endpoint
-        const response = await fetch(
-          'http://localhost:3000/api/timocom/vehicle-space-offers/bulk',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              offers: vehicleSpaceOffers,
-              maxConcurrent: 10, // Process more items concurrently for better performance
-            }),
-          },
-        );
+        const client = createTimocomClient();
+        const maxConcurrent = 5;
 
-        if (response.ok) {
-          const bulkResult = await response.json();
-          timocomResults = bulkResult.results;
-          console.log(
-            `✅ TIMOCOM bulk posting completed: ${timocomResults?.created || 0} successful, ${timocomResults?.failed || 0} failed`,
-          );
-        } else {
-          console.error(
-            `❌ TIMOCOM bulk posting failed: ${response.status} ${response.statusText}`,
-          );
-          timocomResults = { total: numCount, created: 0, failed: numCount };
+        const results: Array<{ index: number; success: boolean; data?: unknown; error?: string }> = [];
+        const failed: Array<{ index: number; error: string }> = [];
+        let processed = 0;
+
+        // Process offers in batches to avoid overwhelming the API
+        for (let i = 0; i < vehicleSpaceOffers.length; i += maxConcurrent) {
+          const batch = vehicleSpaceOffers.slice(i, i + maxConcurrent);
+          const batchPromises = batch.map(async (offer: unknown, index: number) => {
+            const actualIndex = i + index;
+
+            // First attempt
+            try {
+              const result = await client.createVehicleSpaceOffer(offer as PublishVehicleSpaceOfferRequest);
+              processed++;
+              console.log(`✅ Created offer ${processed}/${vehicleSpaceOffers.length}`);
+              return { index: actualIndex, success: true, data: result.data };
+            } catch (error: unknown) {
+              const errorMessage = getErrorMessage(error);
+              console.log(
+                `⚠️ First attempt failed for offer ${actualIndex}: ${errorMessage}. Retrying in 1 second...`,
+              );
+
+              // Wait 1 second before retry
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+
+              // Retry attempt
+              try {
+                const result = await client.createVehicleSpaceOffer(offer as PublishVehicleSpaceOfferRequest);
+                processed++;
+                console.log(`✅ Retry successful for offer ${processed}/${vehicleSpaceOffers.length}`);
+                return { index: actualIndex, success: true, data: result.data };
+              } catch (retryError: unknown) {
+                const retryErrorMessage = getErrorMessage(retryError);
+                failed.push({
+                  index: actualIndex,
+                  error: `Initial: ${errorMessage}, Retry: ${retryErrorMessage}`,
+                });
+                console.log(`❌ Both attempts failed for offer ${actualIndex}: ${retryErrorMessage}`);
+                return { index: actualIndex, success: false, error: retryErrorMessage };
+              }
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          results.push(...batchResults);
+
+          // Small delay between batches to be respectful to the API
+          if (i + maxConcurrent < vehicleSpaceOffers.length) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
+
+        timocomResults = {
+          total: vehicleSpaceOffers.length,
+          created: results.filter((r) => r.success).length,
+          failed: failed.length,
+          results: {
+            total: vehicleSpaceOffers.length,
+            created: results.filter((r) => r.success).length,
+            failed: failed.length,
+            createdOffers: results.filter((r) => r.success).map((r) => r.data),
+            failures: failed,
+          },
+        };
+
+        console.log(
+          `✅ TIMOCOM bulk posting completed: ${timocomResults.created} successful, ${timocomResults.failed} failed`,
+        );
       } catch (bulkError: unknown) {
         console.error('❌ TIMOCOM bulk posting error:', bulkError);
         timocomResults = { total: numCount, created: 0, failed: numCount };
@@ -268,69 +362,159 @@ router.post('/all', async (req: Request, res: Response) => {
         `📤 API: Bulk posting offers to TIMOCOM (${numFreightCount} freight, ${numVehicleCount} vehicle)...`,
       );
 
-      // Post freight offers to TIMOCOM using bulk endpoint
+      // Post freight offers to TIMOCOM using direct bulk creation
       console.log(`📤 Bulk posting ${numFreightCount} freight offers...`);
       try {
-        const freightResponse = await fetch(
-          'http://localhost:3000/api/timocom/freight-offers/bulk',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              offers: freightOffers,
-              maxConcurrent: 10,
-            }),
-          },
-        );
+        const client = createTimocomClient();
+        const maxConcurrent = 5;
 
-        if (freightResponse.ok) {
-          const bulkResult = await freightResponse.json();
-          freightTimocomResults = bulkResult.results;
-          console.log(
-            `✅ Freight bulk posting completed: ${freightTimocomResults?.created || 0} successful, ${freightTimocomResults?.failed || 0} failed`,
-          );
-        } else {
-          console.error(
-            `❌ Freight bulk posting failed: ${freightResponse.status} ${freightResponse.statusText}`,
-          );
-          freightTimocomResults = { total: numFreightCount, created: 0, failed: numFreightCount };
+        const results: Array<{ index: number; success: boolean; data?: unknown; error?: string }> = [];
+        const failed: Array<{ index: number; error: string }> = [];
+        let processed = 0;
+
+        // Process offers in batches to avoid overwhelming the API
+        for (let i = 0; i < freightOffers.length; i += maxConcurrent) {
+          const batch = freightOffers.slice(i, i + maxConcurrent);
+          const batchPromises = batch.map(async (offer: unknown, index: number) => {
+            const actualIndex = i + index;
+
+            // First attempt
+            try {
+              const result = await client.createFreightOffer(offer as CreateFreightOfferRequest);
+              processed++;
+              console.log(`✅ Created freight offer ${processed}/${freightOffers.length}`);
+              return { index: actualIndex, success: true, data: result.data };
+            } catch (error: unknown) {
+              const errorMessage = getErrorMessage(error);
+              console.log(
+                `⚠️ First attempt failed for freight offer ${actualIndex}: ${errorMessage}. Retrying in 1 second...`,
+              );
+
+              // Wait 1 second before retry
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+
+              // Retry attempt
+              try {
+                const result = await client.createFreightOffer(offer as CreateFreightOfferRequest);
+                processed++;
+                console.log(`✅ Retry successful for freight offer ${processed}/${freightOffers.length}`);
+                return { index: actualIndex, success: true, data: result.data };
+              } catch (retryError: unknown) {
+                const retryErrorMessage = getErrorMessage(retryError);
+                failed.push({
+                  index: actualIndex,
+                  error: `Initial: ${errorMessage}, Retry: ${retryErrorMessage}`,
+                });
+                console.log(`❌ Both attempts failed for freight offer ${actualIndex}: ${retryErrorMessage}`);
+                return { index: actualIndex, success: false, error: retryErrorMessage };
+              }
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          results.push(...batchResults);
+
+          // Small delay between batches to be respectful to the API
+          if (i + maxConcurrent < freightOffers.length) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
+
+        freightTimocomResults = {
+          total: freightOffers.length,
+          created: results.filter((r) => r.success).length,
+          failed: failed.length,
+          results: {
+            total: freightOffers.length,
+            created: results.filter((r) => r.success).length,
+            failed: failed.length,
+            createdOffers: results.filter((r) => r.success).map((r) => r.data),
+            failures: failed,
+          },
+        };
+
+        console.log(
+          `✅ Freight bulk posting completed: ${freightTimocomResults.created} successful, ${freightTimocomResults.failed} failed`,
+        );
       } catch (bulkError: unknown) {
         console.error('❌ Freight bulk posting error:', bulkError);
         freightTimocomResults = { total: numFreightCount, created: 0, failed: numFreightCount };
       }
 
-      // Post vehicle space offers to TIMOCOM using bulk endpoint
+      // Post vehicle space offers to TIMOCOM using direct bulk creation
       console.log(`📤 Bulk posting ${numVehicleCount} vehicle space offers...`);
       try {
-        const vehicleResponse = await fetch(
-          'http://localhost:3000/api/timocom/vehicle-space-offers/bulk',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              offers: vehicleSpaceOffers,
-              maxConcurrent: 10,
-            }),
-          },
-        );
+        const client = createTimocomClient();
+        const maxConcurrent = 5;
 
-        if (vehicleResponse.ok) {
-          const bulkResult = await vehicleResponse.json();
-          vehicleTimocomResults = bulkResult.results;
-          console.log(
-            `✅ Vehicle bulk posting completed: ${vehicleTimocomResults?.created || 0} successful, ${vehicleTimocomResults?.failed || 0} failed`,
-          );
-        } else {
-          console.error(
-            `❌ Vehicle bulk posting failed: ${vehicleResponse.status} ${vehicleResponse.statusText}`,
-          );
-          vehicleTimocomResults = { total: numVehicleCount, created: 0, failed: numVehicleCount };
+        const results: Array<{ index: number; success: boolean; data?: unknown; error?: string }> = [];
+        const failed: Array<{ index: number; error: string }> = [];
+        let processed = 0;
+
+        // Process offers in batches to avoid overwhelming the API
+        for (let i = 0; i < vehicleSpaceOffers.length; i += maxConcurrent) {
+          const batch = vehicleSpaceOffers.slice(i, i + maxConcurrent);
+          const batchPromises = batch.map(async (offer: unknown, index: number) => {
+            const actualIndex = i + index;
+
+            // First attempt
+            try {
+              const result = await client.createVehicleSpaceOffer(offer as PublishVehicleSpaceOfferRequest);
+              processed++;
+              console.log(`✅ Created vehicle offer ${processed}/${vehicleSpaceOffers.length}`);
+              return { index: actualIndex, success: true, data: result.data };
+            } catch (error: unknown) {
+              const errorMessage = getErrorMessage(error);
+              console.log(
+                `⚠️ First attempt failed for vehicle offer ${actualIndex}: ${errorMessage}. Retrying in 1 second...`,
+              );
+
+              // Wait 1 second before retry
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+
+              // Retry attempt
+              try {
+                const result = await client.createVehicleSpaceOffer(offer as PublishVehicleSpaceOfferRequest);
+                processed++;
+                console.log(`✅ Retry successful for vehicle offer ${processed}/${vehicleSpaceOffers.length}`);
+                return { index: actualIndex, success: true, data: result.data };
+              } catch (retryError: unknown) {
+                const retryErrorMessage = getErrorMessage(retryError);
+                failed.push({
+                  index: actualIndex,
+                  error: `Initial: ${errorMessage}, Retry: ${retryErrorMessage}`,
+                });
+                console.log(`❌ Both attempts failed for vehicle offer ${actualIndex}: ${retryErrorMessage}`);
+                return { index: actualIndex, success: false, error: retryErrorMessage };
+              }
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          results.push(...batchResults);
+
+          // Small delay between batches to be respectful to the API
+          if (i + maxConcurrent < vehicleSpaceOffers.length) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
+
+        vehicleTimocomResults = {
+          total: vehicleSpaceOffers.length,
+          created: results.filter((r) => r.success).length,
+          failed: failed.length,
+          results: {
+            total: vehicleSpaceOffers.length,
+            created: results.filter((r) => r.success).length,
+            failed: failed.length,
+            createdOffers: results.filter((r) => r.success).map((r) => r.data),
+            failures: failed,
+          },
+        };
+
+        console.log(
+          `✅ Vehicle bulk posting completed: ${vehicleTimocomResults.created} successful, ${vehicleTimocomResults.failed} failed`,
+        );
       } catch (bulkError: unknown) {
         console.error('❌ Vehicle bulk posting error:', bulkError);
         vehicleTimocomResults = { total: numVehicleCount, created: 0, failed: numVehicleCount };

@@ -32,7 +32,6 @@ export type {
   TimocomFreightOffersList,
   // Core TIMOCOM types
   TimocomMeta,
-  UpdateFreightOfferRequest,
   VehicleProperties,
   VehicleSpaceProperties,
   WithdrawOwnParams,

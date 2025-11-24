@@ -1,10 +1,4 @@
-import type {
-  ContactPerson,
-  CustomerRef,
-  LoadingPlace,
-  Money,
-  TimocomEnvelope,
-} from './freight.js';
+import type { ContactPerson, CustomerRef, Money, TimocomEnvelope } from './freight.js';
 
 export type VehicleSpaceProperties = {
   body: string[];
@@ -18,14 +12,53 @@ export type VehicleSpaceProperties = {
 };
 
 export type PublishVehicleSpaceOfferRequest = {
-  objectType: string;
+  objectType?: string; // Optional - may be inferred from endpoint
   customer: CustomerRef; // { id: timocomId }
   contactPerson: ContactPerson;
   vehicleProperties: VehicleSpaceProperties;
-  trackable: boolean; // per spec
-  acceptQuotes: boolean; // per spec
+  trackable?: boolean; // per spec
+  acceptQuotes?: boolean; // per spec
 
-  loadingPlaces: LoadingPlace[]; // LOADING first, UNLOADING last
+  // Vehicle space offers use start/destination/loadingDate instead of loadingPlaces
+  start: {
+    objectType?: string;
+    city: string;
+    country: string;
+    postalCode?: string;
+    geoCoordinate?: {
+      longitude: number;
+      latitude: number;
+    };
+    geocoded?: boolean;
+    streetOrPostbox?: string;
+  };
+
+  destination?: {
+    objectType?: string;
+    area?: {
+      address: {
+        objectType?: string;
+        city: string;
+        country: string;
+        postalCode?: string;
+        geoCoordinate?: {
+          longitude: number;
+          latitude: number;
+        };
+        geocoded?: boolean;
+        streetOrPostbox?: string;
+      };
+      size_km: number;
+    };
+  };
+
+  loadingDate: string; // YYYY-MM-DD format
+
+  // Vehicle dimensions
+  trailerLength_m?: number;
+  truckLength_m?: number;
+  trailerWeight_t?: number;
+  truckWeight_t?: number;
 
   price?: Money;
   paymentDueWithinDays?: number; // 0..999
@@ -33,6 +66,7 @@ export type PublishVehicleSpaceOfferRequest = {
   publicRemark?: string; // <= 500
   internalRemark?: string; // <= 50
   logisticsDocumentTypes?: string[];
+  excludedCustomers?: number[];
 
   closedFreightExchangeSetting?: {
     closedFreightExchangeId: number;
