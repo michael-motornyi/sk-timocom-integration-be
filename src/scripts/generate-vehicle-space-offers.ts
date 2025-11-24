@@ -226,7 +226,7 @@ function convertRowToVehicleSpaceOffer(
   const tomorrowStr = tomorrow.toISOString().split('T')[0] || '2025-11-22';
 
   const offer: PublishVehicleSpaceOfferRequest = {
-    objectType: 'vehicleSpaceOffer',
+    objectType: 'VehicleSpaceOffer',
     customer: { id: 902245 }, // Always use the actual TIMOCOM company ID from environment
     contactPerson: createContactPerson(row),
     vehicleProperties: createVehicleSpaceProperties(row),
@@ -238,7 +238,7 @@ function convertRowToVehicleSpaceOffer(
       objectType: 'address',
       city: row.startCity || 'Berlin',
       country: row.startCountry || 'DE',
-      postalCode: row.startPostalCode || undefined,
+      ...(row.startPostalCode && { postalCode: row.startPostalCode }),
     },
 
     destination: {

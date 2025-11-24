@@ -1,0 +1,149 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+      - production
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  APP_NAME: 'timocom-integration'
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Build application
+        run: npm run build
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy
+          cp -r dist package*.json deploy/
+          cd deploy && zip -r ../deployment.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Copy deployment package to S3
+        run: |
+          aws s3 cp deployment.zip s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/${{ env.APP_NAME }}/deployment-${{ github.sha }}.zip
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script: |
+            # Set variables
+            APP_DIR="/home/${{ secrets.EC2_USER }}/${{ env.APP_NAME }}"
+            BACKUP_DIR="/home/${{ secrets.EC2_USER }}/backups"
+            SERVICE_NAME="${{ env.APP_NAME }}"
+
+            # Create directories
+            mkdir -p $APP_DIR $BACKUP_DIR
+
+            # Stop the application service if running
+            sudo systemctl stop $SERVICE_NAME || echo "Service not running"
+
+            # Backup current deployment
+            if [ -d "$APP_DIR/current" ]; then
+              sudo tar -czf $BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).tar.gz -C $APP_DIR current
+              echo "Backup created"
+            fi
+
+            # Download and extract new deployment
+            cd $APP_DIR
+            aws s3 cp s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/${{ env.APP_NAME }}/deployment-${{ github.sha }}.zip ./
+
+            # Remove old current directory and create new one
+            sudo rm -rf current
+            mkdir -p current
+            unzip -q deployment-${{ github.sha }}.zip -d current/
+
+            # Install production dependencies
+            cd current
+            npm ci --production
+
+            # Copy environment file if exists
+            if [ -f "/home/${{ secrets.EC2_USER }}/.env.${{ env.APP_NAME }}" ]; then
+              cp "/home/${{ secrets.EC2_USER }}/.env.${{ env.APP_NAME }}" .env
+            fi
+
+            # Set permissions
+            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} $APP_DIR
+
+            # Start the application service
+            sudo systemctl start $SERVICE_NAME
+            sudo systemctl enable $SERVICE_NAME
+
+            # Check service status
+            sleep 5
+            sudo systemctl status $SERVICE_NAME
+
+            # Cleanup old deployments (keep last 5)
+            cd $APP_DIR
+            ls -t deployment-*.zip | tail -n +6 | xargs rm -f || true
+
+            # Cleanup old backups (keep last 10)
+            cd $BACKUP_DIR
+            ls -t backup-*.tar.gz | tail -n +11 | xargs rm -f || true
+
+            echo "Deployment completed successfully"
+
+      - name: Health check
+        run: |
+          # Wait for application to start
+          sleep 30
+
+          # Health check
+          for i in {1..5}; do
+            if curl -f http://${{ secrets.EC2_HOST }}:3001/health; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Health check attempt $i failed, retrying..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+      - name: Notification on success
+        if: success()
+        run: |
+          echo "🚀 Deployment to EC2 completed successfully!"
+          echo "Application URL: http://${{ secrets.EC2_HOST }}:3001"
+          echo "Health check: http://${{ secrets.EC2_HOST }}:3001/health"
+          echo "API docs: http://${{ secrets.EC2_HOST }}:3001/api/docs"
+
+      - name: Notification on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Check the logs above for detailed error information."

@@ -1,6 +1,6 @@
 // Main types export - Re-exports all types for easy importing
 
-// You can also add specific grouped exports if needed
+// Freight offer types
 export type {
   Address,
   ContactPerson,
@@ -19,9 +19,6 @@ export type {
   PublishFreightOfferRequest,
   PublishFreightOfferResponse,
   PublishFreightOfferResponsePayload,
-  // Vehicle Space Offer types
-  PublishVehicleSpaceOfferRequest,
-  PublishVehicleSpaceOfferResponse,
   TimocomApiResponse,
   // Configuration
   TimocomConfig,
@@ -33,7 +30,16 @@ export type {
   // Core TIMOCOM types
   TimocomMeta,
   VehicleProperties,
-  VehicleSpaceProperties,
   WithdrawOwnParams,
 } from './freight.js';
-export * from './freight.js';
+
+// Vehicle Space Offer types
+export type {
+  GetMyVehicleSpaceOfferResponse,
+  ListMyVehicleSpaceOffersResponse,
+  PublishVehicleSpaceOfferRequest,
+  PublishVehicleSpaceOfferResponse,
+  VehicleSpaceOfferSummary,
+  VehicleSpaceProperties,
+  WithdrawVehicleSpaceParams,
+} from './vehicle-space.js';

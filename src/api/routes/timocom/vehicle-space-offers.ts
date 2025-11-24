@@ -5,14 +5,11 @@ import { createTimocomClient, requireTimocomConfig } from './common.js';
 const router = express.Router();
 
 // Get all vehicle space offers
-router.get('/vehicle-space-offers', requireTimocomConfig, async (req: Request, res: Response) => {
+router.get('/vehicle-space-offers', requireTimocomConfig, async (_req: Request, res: Response) => {
   try {
     const client = createTimocomClient();
-    const page = Number.parseInt(req.query.page as string, 10) || 1;
-    const limit = Number.parseInt(req.query.limit as string, 10) || 50;
-    const status = req.query.status as 'active' | 'inactive' | 'expired' | 'completed';
 
-    const result = await client.getMyVehicleSpaceOffers({ page, limit, status });
+    const result = await client.getMyVehicleSpaceOffers();
 
     res.json(result);
   } catch (error: unknown) {

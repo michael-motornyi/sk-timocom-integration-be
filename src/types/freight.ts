@@ -243,36 +243,4 @@ export interface CreateFreightOfferRequest extends PublishFreightOfferRequest {}
 // ============================================================================
 // VEHICLE SPACE OFFER TYPES
 // ============================================================================
-
-export interface PublishVehicleSpaceOfferRequest {
-  objectType: 'VehicleSpaceOffer';
-  customer: CustomerRef;
-  contactPerson: ContactPerson;
-  vehicleProperties: VehicleProperties;
-  trackable: boolean;
-  acceptQuotes: boolean;
-  loadingPlaces: LoadingPlace[];
-  additionalInformation?: string[];
-  publicRemark?: string;
-  internalRemark?: string;
-  closedFreightExchangeSetting?: {
-    closedFreightExchangeId: number;
-    publicationType: 'INTERNAL_ONLY' | 'EXTERNAL_LATER';
-    remark?: string;
-    retentionDurationInMinutes?: number;
-    publicationDateTime?: string;
-  };
-}
-
-export interface PublishVehicleSpaceOfferResponse {
-  success: boolean;
-  data?: {
-    publicOfferId: string;
-    internalOfferId: string;
-    status: string;
-  };
-  error?: string;
-  timestamp: string;
-}
-
-export type VehicleSpaceProperties = VehicleProperties;
+// Vehicle Space Offer types moved to vehicle-space.ts to avoid conflicts

@@ -34,7 +34,10 @@ router.get('/api/docs', (_req: Request, res: Response) => {
       'POST /api/timocom/freight-offers': 'Create new freight offer in TIMOCOM',
       'PUT /api/timocom/freight-offers/:id': 'Update freight offer in TIMOCOM',
       'DELETE /api/timocom/freight-offers/:id': 'Delete freight offer from TIMOCOM',
-      'POST /api/timocom/freight-offers/bulk': 'Bulk create freight offers in TIMOCOM',
+      'GET /api/timocom/vehicle-space-offers': 'Get all vehicle space offers from TIMOCOM',
+      'GET /api/timocom/vehicle-space-offers/:id': 'Get specific vehicle space offer by ID',
+      'POST /api/timocom/vehicle-space-offers': 'Create new vehicle space offer in TIMOCOM',
+      'DELETE /api/timocom/vehicle-space-offers/:id': 'Delete vehicle space offer from TIMOCOM',
       'GET /api/docs': 'This documentation',
     },
     examples: {
@@ -43,53 +46,71 @@ router.get('/api/docs', (_req: Request, res: Response) => {
         url: '/api/generate/freight',
         body: { count: 500 },
         description: 'Generates 500 freight offers and returns them directly in response',
+        curl: 'curl -X POST http://localhost:3001/api/generate/freight -H "Content-Type: application/json" -d \'{"count": 500}\'',
       },
       generateVehicle: {
         method: 'POST',
         url: '/api/generate/vehicle-space',
         body: { count: 300 },
         description: 'Generates 300 vehicle space offers and returns them directly in response',
+        curl: 'curl -X POST http://localhost:3001/api/generate/vehicle-space -H "Content-Type: application/json" -d \'{"count": 300}\'',
       },
       generateAll: {
         method: 'POST',
         url: '/api/generate/all',
         body: { freightCount: 300, vehicleCount: 200 },
         description: 'Generate 300 freight and 200 vehicle space offers, returns both in response',
+        curl: 'curl -X POST http://localhost:3001/api/generate/all -H "Content-Type: application/json" -d \'{"freightCount": 300, "vehicleCount": 200}\'',
       },
       timocomTest: {
         method: 'GET',
         url: '/api/timocom/test',
         headers: { 'X-TIMOCOM-API-Key': 'your-api-key' },
         description: 'Test connection to TIMOCOM API',
+        curl: 'curl -X GET http://localhost:3001/api/timocom/test',
       },
-      timocomGetOffers: {
+      timocomGetFreightOffers: {
         method: 'GET',
-        url: '/api/timocom/freight-offers?page=1&limit=10',
-        headers: { 'X-TIMOCOM-API-Key': 'your-api-key' },
-        description: 'Get paginated list of freight offers from TIMOCOM',
+        url: '/api/timocom/freight-offers',
+        description: 'Get all freight offers from TIMOCOM',
+        curl: 'curl -X GET http://localhost:3001/api/timocom/freight-offers',
       },
-      timocomCreateOffer: {
+      timocomGetVehicleSpaceOffers: {
+        method: 'GET',
+        url: '/api/timocom/vehicle-space-offers',
+        description: 'Get all vehicle space offers from TIMOCOM',
+        curl: 'curl -X GET http://localhost:3001/api/timocom/vehicle-space-offers',
+      },
+      timocomCreateFreightOffer: {
         method: 'POST',
         url: '/api/timocom/freight-offers',
-        headers: { 'X-TIMOCOM-API-Key': 'your-api-key' },
         body: {
           freightDescription: 'Steel coils',
           weight_t: 25.5,
           loadingPlaces: [{ loadingType: 'LOADING', address: { country: 'DE', city: 'Berlin' } }],
         },
         description: 'Create new freight offer in TIMOCOM',
+        curl: 'curl -X POST http://localhost:3001/api/timocom/freight-offers -H "Content-Type: application/json" -d \'{"freightDescription": "Steel coils", "weight_t": 25.5, "loadingPlaces": [{"loadingType": "LOADING", "address": {"country": "DE", "city": "Berlin"}}]}\'',
       },
-      timocomBulkCreate: {
+      timocomCreateVehicleSpaceOffer: {
         method: 'POST',
-        url: '/api/timocom/freight-offers/bulk',
-        headers: { 'X-TIMOCOM-API-Key': 'your-api-key' },
+        url: '/api/timocom/vehicle-space-offers',
         body: {
-          offers: [
-            /* array of freight offers */
-          ],
-          maxConcurrent: 5,
+          customer: { id: 902245 },
+          contactPerson: {
+            title: 'MR',
+            firstName: 'John',
+            lastName: 'Doe',
+            email: 'john@example.com',
+            languages: ['en'],
+            businessPhone: '+49 123 456 789',
+          },
+          vehicleProperties: { body: ['MOVING_FLOOR'], type: ['VEHICLE_UP_TO_12_T'] },
+          start: { objectType: 'address', country: 'DE', city: 'Berlin' },
+          loadingDate: '2025-12-01',
         },
-        description: 'Bulk create multiple freight offers in TIMOCOM',
+        description: 'Create new vehicle space offer in TIMOCOM',
+        curl: 'curl -X POST http://localhost:3001/api/timocom/vehicle-space-offers -H "Content-Type: application/json" -d \'{"customer": {"id": 902245}, "contactPerson": {"title": "MR", "firstName": "John", "lastName": "Doe", "email": "john@example.com", "languages": ["en"], "businessPhone": "+49 123 456 789"}, "vehicleProperties": {"body": ["MOVING_FLOOR"], "type": ["VEHICLE_UP_TO_12_T"]}, "start": {"objectType": "address", "country": "DE", "city": "Berlin"}, "loadingDate": "2025-12-01"}\'',
       },
     },
   });

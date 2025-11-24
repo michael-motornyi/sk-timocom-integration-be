@@ -1,0 +1,32 @@
+[Unit]
+Description=TIMOCOM Integration API Server
+Documentation=https://github.com/your-org/timocom-integration
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/timocom-integration/current
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=3001
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=timocom-integration
+
+# Security settings
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/ubuntu/timocom-integration
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
