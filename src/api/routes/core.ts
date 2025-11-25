@@ -38,6 +38,8 @@ router.get('/api/docs', (_req: Request, res: Response) => {
       'GET /api/timocom/vehicle-space-offers/:id': 'Get specific vehicle space offer by ID',
       'POST /api/timocom/vehicle-space-offers': 'Create new vehicle space offer in TIMOCOM',
       'DELETE /api/timocom/vehicle-space-offers/:id': 'Delete vehicle space offer from TIMOCOM',
+      'GET /api/consolidation/info': 'Get consolidation export service information',
+      'POST /api/consolidation/export': 'Export TIMOCOM data for AssignmentProblem_Consolid',
       'GET /api/docs': 'This documentation',
     },
     examples: {

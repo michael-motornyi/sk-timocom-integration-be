@@ -5,7 +5,7 @@ import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
-
+import consolidationRoutes from './api/routes/consolidation.js';
 // Import route modules
 import coreRoutes from './api/routes/core.js';
 import csvRoutes from './api/routes/csv.js';
@@ -27,6 +27,7 @@ app.use('/', coreRoutes); // Root and core endpoints
 app.use('/api/generate', generateRoutes); // Generation endpoints
 app.use('/api/csv', csvRoutes); // CSV management endpoints
 app.use('/api/timocom', timocomRoutes); // TIMOCOM API integration
+app.use('/api/consolidation', consolidationRoutes); // Consolidation export
 
 // Sample endpoint removed - data is now returned directly in generation API responses
 
