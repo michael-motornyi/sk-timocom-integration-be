@@ -114,7 +114,7 @@ router.post('/export-mixed', async (req: Request, res: Response) => {
       mockVehicleCount = 5,
       maxOrders = 10,
       format = 'both',
-      configName = 'mixed_consolid'
+      configName = 'mixed_consolid',
     } = req.body;
 
     const result = await exportMixedConsolidationData({
@@ -122,7 +122,7 @@ router.post('/export-mixed', async (req: Request, res: Response) => {
       mockVehicleCount,
       maxOrders,
       format,
-      configName
+      configName,
     });
 
     if (result.success) {
@@ -134,22 +134,26 @@ router.post('/export-mixed', async (req: Request, res: Response) => {
         data: {
           vehicles: result.data?.vehicles.length || 0,
           orders: result.data?.orders.length || 0,
-          metadata: result.data?.metadata
+          metadata: result.data?.metadata,
         },
         instructions: {
           build: 'cd ../AssignmentProblem_Consolid && ./build.sh',
-          run: `cd ${result.exportDirectory} && ./run_mixed_consolidation.sh`
+          run: `cd ${result.exportDirectory} && ./run_mixed_consolidation.sh`,
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } else {
       res.status(500).json({
         success: false,
-        error: result.message
+        error: result.message,
       });
     }
   } catch (error) {
-    const errorResponse = handleRouteError(error, 'Mixed consolidation export', 'Mixed consolidation export failed');
+    const errorResponse = handleRouteError(
+      error,
+      'Mixed consolidation export',
+      'Mixed consolidation export failed',
+    );
     res.status(500).json(errorResponse);
   }
 });

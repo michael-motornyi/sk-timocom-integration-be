@@ -63,16 +63,21 @@ function generateMockVehicleSpaceOffers(count = 5): ConsolidationVehicle[] {
     { name: 'Praha', country: 'CZ' },
     { name: 'Vienna', country: 'AT' },
     { name: 'Amsterdam', country: 'NL' },
-    { name: 'Brussels', country: 'BE' }
+    { name: 'Brussels', country: 'BE' },
   ];
 
-  const vehicleTypes = ['VEHICLE_UP_TO_12_T', 'VEHICLE_UP_TO_7_5_T', 'VEHICLE_UP_TO_3_5_T'] as const;
-  
+  const vehicleTypes = [
+    'VEHICLE_UP_TO_12_T',
+    'VEHICLE_UP_TO_7_5_T',
+    'VEHICLE_UP_TO_3_5_T',
+  ] as const;
+
   return Array.from({ length: count }, (_, index) => {
     const startCity = cities[Math.floor(Math.random() * cities.length)] ?? cities[0];
     const destCity = cities[Math.floor(Math.random() * cities.length)] ?? cities[1];
-    const vehicleType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)] ?? 'VEHICLE_UP_TO_12_T';
-    
+    const vehicleType =
+      vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)] ?? 'VEHICLE_UP_TO_12_T';
+
     let capacity = { weight: 12000, volume: 50 };
     if (vehicleType === 'VEHICLE_UP_TO_7_5_T') {
       capacity = { weight: 7500, volume: 35 };
@@ -86,8 +91,8 @@ function generateMockVehicleSpaceOffers(count = 5): ConsolidationVehicle[] {
       capacity,
       location: {
         start: `${startCity?.name ?? 'Berlin'}, ${startCity?.country ?? 'DE'}`,
-        destination: `${destCity?.name ?? 'Munich'}, ${destCity?.country ?? 'DE'}`
-      }
+        destination: `${destCity?.name ?? 'Munich'}, ${destCity?.country ?? 'DE'}`,
+      },
     };
   });
 }
@@ -98,10 +103,10 @@ function generateMockVehicleSpaceOffers(count = 5): ConsolidationVehicle[] {
 function convertFreightOffer(offer: unknown, index: number): ConsolidationOrder {
   const offerData = offer as Record<string, unknown>;
   const loadingPlaces = (offerData.loadingPlaces as Record<string, unknown>[]) || [];
-  
-  const pickup = loadingPlaces.find(p => p.loadingType === 'LOADING');
-  const delivery = loadingPlaces.find(p => p.loadingType === 'UNLOADING');
-  
+
+  const pickup = loadingPlaces.find((p) => p.loadingType === 'LOADING');
+  const delivery = loadingPlaces.find((p) => p.loadingType === 'UNLOADING');
+
   const pickupAddress = pickup?.address as Record<string, unknown>;
   const deliveryAddress = delivery?.address as Record<string, unknown>;
 
@@ -115,7 +120,7 @@ function convertFreightOffer(offer: unknown, index: number): ConsolidationOrder 
     requirements: {
       weight,
       volume: estimatedVolume,
-      vehicleType: 
+      vehicleType:
         ((offerData.vehicleProperties as Record<string, unknown>)?.type as string[])?.[0] ||
         'VEHICLE_UP_TO_12_T',
     },
@@ -142,13 +147,15 @@ function convertFreightOffer(offer: unknown, index: number): ConsolidationOrder 
 /**
  * Export mixed data: mock vehicles + real TIMOCOM freight offers
  */
-export async function exportMixedConsolidationData(options: {
-  outputDir?: string;
-  mockVehicleCount?: number;
-  maxOrders?: number;
-  format?: 'json' | 'csv' | 'both';
-  configName?: string;
-} = {}): Promise<{
+export async function exportMixedConsolidationData(
+  options: {
+    outputDir?: string;
+    mockVehicleCount?: number;
+    maxOrders?: number;
+    format?: 'json' | 'csv' | 'both';
+    configName?: string;
+  } = {},
+): Promise<{
   success: boolean;
   message: string;
   data?: ConsolidationData;
@@ -161,7 +168,7 @@ export async function exportMixedConsolidationData(options: {
       mockVehicleCount = 5,
       maxOrders = 10,
       format = 'both',
-      configName = 'mixed_consolid'
+      configName = 'mixed_consolid',
     } = options;
 
     console.log('🚛 Exporting mixed consolidation data...');
@@ -210,32 +217,34 @@ export async function exportMixedConsolidationData(options: {
     } catch (error) {
       console.warn('⚠️ Could not fetch freight offers, using mock data:', (error as Error).message);
       // Fallback to mock freight data if TIMOCOM fails
-      consolidationData.orders = [{
-        id: 'mock_order_1',
-        description: 'Mock freight offer (TIMOCOM unavailable)',
-        requirements: {
-          weight: 2500,
-          volume: 15,
-          vehicleType: 'VEHICLE_UP_TO_12_T'
-        },
-        route: {
-          pickup: {
-            location: 'Berlin, DE',
-            timeWindow: {
-              start: '2025-11-26',
-              end: '2025-11-26'
-            }
+      consolidationData.orders = [
+        {
+          id: 'mock_order_1',
+          description: 'Mock freight offer (TIMOCOM unavailable)',
+          requirements: {
+            weight: 2500,
+            volume: 15,
+            vehicleType: 'VEHICLE_UP_TO_12_T',
           },
-          delivery: {
-            location: 'Munich, DE',
-            timeWindow: {
-              start: '2025-11-27',
-              end: '2025-11-27'
-            }
-          }
+          route: {
+            pickup: {
+              location: 'Berlin, DE',
+              timeWindow: {
+                start: '2025-11-26',
+                end: '2025-11-26',
+              },
+            },
+            delivery: {
+              location: 'Munich, DE',
+              timeWindow: {
+                start: '2025-11-27',
+                end: '2025-11-27',
+              },
+            },
+          },
+          revenue: 350,
         },
-        revenue: 350
-      }];
+      ];
     }
 
     // Update metadata
@@ -264,9 +273,10 @@ export async function exportMixedConsolidationData(options: {
       // Vehicles CSV
       const vehiclesCsv = [
         'id,type,weight_capacity,volume_capacity,start_location,destination',
-        ...consolidationData.vehicles.map(v => 
-          `${v.id},${v.type},${v.capacity.weight},${v.capacity.volume},"${v.location.start}","${v.location.destination || 'Flexible'}"`
-        )
+        ...consolidationData.vehicles.map(
+          (v) =>
+            `${v.id},${v.type},${v.capacity.weight},${v.capacity.volume},"${v.location.start}","${v.location.destination || 'Flexible'}"`,
+        ),
       ].join('\n');
 
       const vehiclesCsvPath = path.join(outputDir, 'vehicles.csv');
@@ -276,9 +286,10 @@ export async function exportMixedConsolidationData(options: {
       // Orders CSV
       const ordersCsv = [
         'id,description,weight_kg,volume_m3,pickup_location,delivery_location,pickup_start,pickup_end,delivery_start,delivery_end,revenue',
-        ...consolidationData.orders.map(o => 
-          `${o.id},"${o.description}",${o.requirements.weight},${o.requirements.volume},"${o.route.pickup.location}","${o.route.delivery.location}",${o.route.pickup.timeWindow.start},${o.route.pickup.timeWindow.end},${o.route.delivery.timeWindow.start},${o.route.delivery.timeWindow.end},${o.revenue || 0}`
-        )
+        ...consolidationData.orders.map(
+          (o) =>
+            `${o.id},"${o.description}",${o.requirements.weight},${o.requirements.volume},"${o.route.pickup.location}","${o.route.delivery.location}",${o.route.pickup.timeWindow.start},${o.route.pickup.timeWindow.end},${o.route.delivery.timeWindow.start},${o.route.delivery.timeWindow.end},${o.revenue || 0}`,
+        ),
       ].join('\n');
 
       const ordersCsvPath = path.join(outputDir, 'orders.csv');
@@ -288,24 +299,24 @@ export async function exportMixedConsolidationData(options: {
 
     // Create config file
     const config = {
-      solver: "AssignmentProblem_Consolid",
-      version: "1.0",
-      algorithm: "hungarian_method",
-      objective: "maximize_revenue",
+      solver: 'AssignmentProblem_Consolid',
+      version: '1.0',
+      algorithm: 'hungarian_method',
+      objective: 'maximize_revenue',
       constraints: {
         capacity: true,
         time_windows: true,
-        vehicle_compatibility: true
+        vehicle_compatibility: true,
       },
       input_files: {
-        vehicles: "./vehicles.csv",
-        orders: "./orders.csv"
+        vehicles: './vehicles.csv',
+        orders: './orders.csv',
       },
       output_files: {
-        assignments: "./assignments.json",
-        solution: "./solution.csv",
-        report: "./optimization_report.txt"
-      }
+        assignments: './assignments.json',
+        solution: './solution.csv',
+        report: './optimization_report.txt',
+      },
     };
 
     const configPath = path.join(outputDir, `${configName}_config.json`);
@@ -340,7 +351,7 @@ echo "⚡ Running optimization..."
 if [ $? -eq 0 ]; then
     echo "✅ Mixed consolidation optimization completed successfully!"
     echo "📁 Results saved to: assignments.json"
-    
+
     if [ -f "./assignments.json" ]; then
         echo "📊 Summary:"
         echo "   Mock Vehicles: ${consolidationData.metadata.totalVehicles}"
@@ -365,14 +376,13 @@ fi
       message: 'Mixed consolidation data exported successfully',
       data: consolidationData,
       files,
-      exportDirectory: outputDir
+      exportDirectory: outputDir,
     };
-
   } catch (error) {
     console.error('❌ Mixed consolidation export failed:', error);
     return {
       success: false,
-      message: `Export failed: ${(error as Error).message}`
+      message: `Export failed: ${(error as Error).message}`,
     };
   }
 }
