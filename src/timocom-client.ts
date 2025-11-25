@@ -162,18 +162,9 @@ function createUrlParams(
  */
 async function getMyFreightOffers(
   context: TimocomClientContext,
-  options?: {
-    page?: number;
-    limit?: number;
-    status?: 'active' | 'inactive' | 'expired' | 'completed';
-  },
 ): Promise<TimocomApiResponse<TimocomFreightOffersList>> {
   try {
-    const params = createUrlParams(context.credentials, {
-      ...(options?.page && { page: options.page }),
-      ...(options?.limit && { limit: options.limit }),
-      ...(options?.status && { status: options.status }),
-    });
+    const params = createUrlParams(context.credentials);
 
     const response = await context.client.get(`/freight-exchange/3/my-freight-offers?${params}`);
 
@@ -296,22 +287,13 @@ async function deleteFreightOffer(
 // ============================================================================
 
 /**
- * Get my vehicle space offers with pagination
+ * Get my vehicle space offers
  */
 async function getMyVehicleSpaceOffers(
   context: TimocomClientContext,
-  params: {
-    page?: number;
-    limit?: number;
-    status?: 'active' | 'inactive' | 'expired' | 'completed';
-  } = {},
 ): Promise<TimocomApiResponse<unknown[]>> {
   try {
-    const queryParams = createUrlParams(context.credentials, {
-      ...(params.page && { page: params.page }),
-      ...(params.limit && { limit: params.limit }),
-      ...(params.status && { status: params.status }),
-    });
+    const queryParams = createUrlParams(context.credentials);
 
     const response = await context.client.get(
       `/freight-exchange/3/my-vehicle-space-offers?${queryParams}`,
@@ -446,7 +428,7 @@ async function deleteVehicleSpaceOffer(
 async function testConnection(context: TimocomClientContext): Promise<TimocomApiResponse<void>> {
   try {
     // Use a simple API call to test connection
-    await getMyFreightOffers(context, { limit: 1 });
+    await getMyFreightOffers(context);
     return {
       success: true,
       message: 'TIMOCOM API connection successful',
@@ -479,8 +461,7 @@ function createTimocomApi(config: TimocomConfig = {}) {
     credentials: context.credentials,
 
     // Core API methods
-    getMyFreightOffers: (options?: Parameters<typeof getMyFreightOffers>[1]) =>
-      getMyFreightOffers(context, options),
+    getMyFreightOffers: () => getMyFreightOffers(context),
 
     getFreightOffer: (publicOfferId: string) => getFreightOffer(context, publicOfferId),
 
@@ -489,11 +470,7 @@ function createTimocomApi(config: TimocomConfig = {}) {
     deleteFreightOffer: (publicOfferId: string) => deleteFreightOffer(context, publicOfferId),
 
     // Vehicle space offer methods
-    getMyVehicleSpaceOffers: (params?: {
-      page?: number;
-      limit?: number;
-      status?: 'active' | 'inactive' | 'expired' | 'completed';
-    }) => getMyVehicleSpaceOffers(context, params),
+    getMyVehicleSpaceOffers: () => getMyVehicleSpaceOffers(context),
 
     getVehicleSpaceOffer: (publicOfferId: string) => getVehicleSpaceOffer(context, publicOfferId),
 
